@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  dev:
+    build: .
+    ports:
+      - "8080:8080"                 # para acceder a la app desde el host
+    volumes:
+      - .:/app                      # monta todo tu código
+    working_dir: /app
+    stdin_open: true                # permite interactuar
+    tty: true                       # terminal interactiva
