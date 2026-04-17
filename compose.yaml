@@ -1,0 +1,160 @@
+# ============================================================================
+# ARCHIVO: compose.yaml
+# PROPÓSITO: Definir y ejecutar los contenedores Docker para el entorno de desarrollo
+# ============================================================================
+# NOTA IMPORTANTE (2026):
+# - El nombre correcto es "compose.yaml" (no "docker-compose.yml")
+# - NO incluye la línea "version:" - está obsoleta
+# - Se usa "docker compose" (sin guión) como comando
+# ============================================================================
+
+# SECCIÓN PRINCIPAL: services
+# Define cada contenedor que Docker Compose va a crear y gestionar
+# Cada servicio se ejecuta en su propio contenedor
+services:
+
+  # --------------------------------------------------------------------------
+  # SERVICIO: dev (entorno de desarrollo)
+  # --------------------------------------------------------------------------
+  # Nombre del servicio: "dev"
+  # - Este nombre se usa para referenciarlo en comandos (ej: docker compose up dev)
+  # - También es el hostname interno entre contenedores (otros servicios pueden acceder a "dev")
+  # - Puedes elegir cualquier nombre descriptivo (app, backend, api, etc.)
+  # --------------------------------------------------------------------------
+
+  dev:
+
+    # INSTRUCCIÓN: build
+    # ¿QUÉ HACE?: Indica a Docker cómo construir la imagen desde un Dockerfile
+    # VALOR "." : Busca el Dockerfile en el directorio ACTUAL (donde está compose.yaml)
+    # OTROS EJEMPLOS:
+    #   build: ./ruta/a/carpeta    (Dockerfile en otra carpeta)
+    #   build:
+    #     context: .               (configuración avanzada con opciones)
+    #     dockerfile: Dockerfile.dev
+    # ----------------------------------------------------------------------
+    build: .
+
+    # INSTRUCCIÓN: ports
+    # ¿QUÉ HACE?: Publica puertos del contenedor al sistema anfitrión (tu PC)
+    # FORMATO: "PUERTO_HOST:PUERTO_CONTENEDOR"
+    #   - PUERTO_HOST: 8080 (puerto en tu computadora)
+    #   - PUERTO_CONTENEDOR: 8080 (puerto donde escucha la app dentro del contenedor)
+    # ¿POR QUÉ ESTO?: Tu navegador usa el puerto de tu PC (localhost:8080),
+    #   Docker lo redirige al puerto interno del contenedor donde Spring Boot escucha
+    # EJEMPLO PRÁCTICO:
+    #   Si tu app escucha en el puerto 3000 (React), harías: ports: - "3000:3000"
+    # MÚLTIPLES PUERTOS:
+    #   ports:
+    #     - "8080:8080"    (app web)
+    #     - "5005:5005"    (debugger de Java)
+    # ----------------------------------------------------------------------
+    ports:
+      - "8080:8080"
+
+    # INSTRUCCIÓN: volumes
+    # ¿QUÉ HACE?: Monta (comparte) carpetas/código entre tu PC y el contenedor
+    # ¿POR QUÉ ES CRÍTICO?: Sin esto, los cambios en tu código NO se reflejan dentro del contenedor
+    #   Tendrías que reconstruir la imagen cada vez que cambias una línea de código
+    # FORMATO: "RUTA_HOST:RUTA_CONTENEDOR"
+    #   - RUTA_HOST: "./" (directorio actual en tu computadora)
+    #     El "./" significa "desde la carpeta donde está compose.yaml"
+    #   - RUTA_CONTENEDOR: "/app" (ruta dentro del contenedor)
+    #     Debe coincidir con el WORKDIR del Dockerfile
+    # ¿CÓMO FUNCIONA EN LA PRÁCTICA?:
+    #   1. En tu PC editas "src/Main.java" (RUTA_HOST: ./src/Main.java)
+    #   2. El contenedor ve el cambio en "/app/src/Main.java"
+    #   3. Spring Boot DevTools detecta el cambio y reinicia automáticamente
+    #   4. ¡Desarrollo en caliente sin reconstruir!
+    # OTROS EJEMPLOS ÚTILES:
+    #   - ./logs:/app/logs      (compartir archivos de log)
+    #   - ~/.m2:/root/.m2       (compartir caché de Maven para no descargar dependencias cada vez)
+    # ----------------------------------------------------------------------
+    volumes:
+      - ./:/app
+
+    # INSTRUCCIÓN: working_dir
+    # ¿QUÉ HACE?: Establece el directorio de trabajo por defecto dentro del contenedor
+    # ¿PARA QUÉ SIRVE?:
+    #   - Todos los comandos (CMD, RUN, ENTRYPOINT) se ejecutan DESDE esta ruta
+    #   - Cuando entres con "docker compose exec dev bash", empezarás AQUÍ
+    # IMPORTANTE: DEBE coincidir con el WORKDIR del Dockerfile, si no coincide:
+    #   - Los volúmenes montarían en lugares diferentes
+    #   - Los comandos de Maven/Gradle buscarían archivos en rutas incorrectas
+    # EJEMPLO DE PROBLEMA:
+    #   Dockerfile: WORKDIR /app
+    #   compose: working_dir: /proyecto  (¡ERROR! El volumen está en /app, no /proyecto)
+    # ----------------------------------------------------------------------
+    working_dir: /app
+
+    # INSTRUCCIÓN: stdin_open
+    # ¿QUÉ HACE?: Mantiene el STDIN (entrada estándar) del contenedor ABIERTO
+    # ¿POR QUÉ LO NECESITAS?:
+    #   - Permite que el contenedor reciba entrada desde tu teclado
+    #   - Sin esto, comandos como "bash" no podrían leer lo que escribes
+    # EQUIVALENTE a la flag "-i" en "docker run"
+    # EJEMPLO DE USO:
+    #   docker compose exec -it dev bash  (necesita stdin_open para que bash funcione)
+    # ¿CUÁNDO ES OPCIONAL?:
+    #   - Aplicaciones web (Spring Boot): NO es estrictamente necesario
+    #   - Entornos interactivos (bash, python, node REPL): ES NECESARIO
+    # ----------------------------------------------------------------------
+    stdin_open: true
+
+    # INSTRUCCIÓN: tty
+    # ¿QUÉ HACE?: Asigna una pseudo-terminal (PTY) al contenedor
+    # ¿PARA QUÉ SIRVE?:
+    #   - Proporciona una terminal COMPLETA con colores, formato, señales (Ctrl+C, Ctrl+Z)
+    #   - Sin tty, la terminal sería "tonta" (sin colores, sin manejo de cursor)
+    # EQUIVALENTE a la flag "-t" en "docker run"
+    # COMBINACIÓN COMÚN:
+    #   stdin_open: true  +  tty: true   =  flag "-it" en docker run
+    #   Esto crea una terminal INTERACTIVA COMPLETA
+    # EJEMPLO PRÁCTICO:
+    #   Con tty: true:
+    #     - Los logs de Spring Boot tienen COLORES ✅
+    #     - Puedes hacer Ctrl+C para detener la app ✅
+    #     - El prompt de bash muestra usuario@hostname ✅
+    #   Sin tty: true:
+    #     - Logs sin colores (solo texto plano) ❌
+    #     - Ctrl+C no funciona correctamente ❌
+    #     - El prompt de bash se ve raro o no aparece ❌
+    # ----------------------------------------------------------------------
+    tty: true
+
+# ============================================================================
+# SECCIÓN OPCIONAL: networks
+# ============================================================================
+# ¿POR QUÉ NO ESTÁ DEFINIDA?:
+#   Docker Compose CREA AUTOMÁTICAMENTE una red por proyecto
+#   Los servicios se comunican por sus nombres (ej: "dev" es un hostname válido)
+#   Solo necesitas definir "networks:" si requieres configuraciones especiales:
+#     - Subredes personalizadas (ej: 172.20.0.0/16)
+#     - Aislamiento entre grupos de servicios
+#     - Usar redes externas preexistentes
+# ============================================================================
+
+# ============================================================================
+# SECCIÓN OPCIONAL: volumes (named volumes)
+# ============================================================================
+# ¿PARA QUÉ SIRVEN?:
+#   Los named volumes son para DATOS PERSISTENTES que NO deben perderse
+#   EJEMPLO TÍPICO: Base de datos, archivos subidos por usuarios, logs
+# DIFERENCIA CON bind mounts (./:/app):
+#   - Bind mount (./:/app):    Comparte una carpeta de TU PC (temporal, para código)
+#   - Named volume (db_data):  Almacenamiento GESTIONADO POR DOCKER (persistente)
+# EJEMPLO DE NAMED VOLUME:
+#   services:
+#     db:
+#       image: postgres
+#       volumes:
+#         - postgres_data:/var/lib/postgresql/data
+#   volumes:
+#     postgres_data:   # <-- Este volumen persiste aunque elimines el contenedor
+# ============================================================================
+
+# ============================================================================
+# SECCIÓN OPCIONAL: configs y secrets
+# ============================================================================
+# Para proyectos más avanzados (Docker Swarm), no necesarios en desarrollo local
+# ============================================================================
